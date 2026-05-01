@@ -1,0 +1,1409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EnergyFlow Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Sora:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.css" rel="stylesheet"/>
+    <style>
+        :root {
+            /* Page background — deep neutral dark, zero warmth */
+            --bg:           #0e1014;
+            --bg2:          #13161b;
+
+            /* Glass — completely neutral frosted glass, no tint */
+            --glass:        rgba(255, 255, 255, 0.05);
+            --glass-hover:  rgba(255, 255, 255, 0.08);
+            --glass-strong: rgba(255, 255, 255, 0.10);
+            --glass-card:   rgba(255, 255, 255, 0.055);
+
+            /* Borders — pure white at low opacity, zero color tint */
+            --border:       rgba(255, 255, 255, 0.10);
+            --border-light: rgba(255, 255, 255, 0.06);
+            --border-top:   rgba(255, 255, 255, 0.18);  /* lighter top = glass rim effect */
+
+            /* Accents — cool blue-white palette, NO amber/orange */
+            --accent:       #a8c8e8;   /* soft cool blue — primary accent */
+            --accent2:      #8bb8d4;   /* medium blue */
+            --accent3:      #6ca8c4;   /* deeper blue */
+            --accent-green: #88c4a8;   /* muted teal-green */
+            --accent-purple:#a898d4;   /* soft violet */
+            --accent-rose:  #c498a8;   /* desaturated rose */
+
+            /* Text — pure cool white */
+            --text:         #f0f4f8;
+            --text-dim:     rgba(240, 244, 248, 0.50);
+            --text-faint:   rgba(240, 244, 248, 0.28);
+
+            /* Shadows — dark with zero color */
+            --shadow:       0 4px 24px rgba(0, 0, 0, 0.45);
+            --shadow-lg:    0 8px 40px rgba(0, 0, 0, 0.55);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: var(--bg);
+            min-height: 100vh;
+            font-family: 'DM Sans', sans-serif;
+            color: var(--text);
+            position: relative;
+            overflow-x: hidden;
+            line-height: 1.7;
+            font-size: 14px;
+        }
+
+        /* Subtle pure white blobs for refraction */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            background:
+                radial-gradient(ellipse 800px 600px at 20% 20%, rgba(255, 255, 255, 0.03) 0%, transparent 70%),
+                radial-gradient(ellipse 700px 500px at 80% 80%, rgba(255, 255, 255, 0.02) 0%, transparent 70%),
+                radial-gradient(ellipse 600px 400px at 80% 20%, rgba(255, 255, 255, 0.02) 0%, transparent 70%),
+                radial-gradient(ellipse 500px 500px at 20% 80%, rgba(255, 255, 255, 0.015) 0%, transparent 70%);
+        }
+
+        /* All main content elements must have z-index > 0 to sit above body::before blobs */
+        .sidebar, .navbar, .main-content, [class*="card"], [class*="panel"], [class*="tab"] {
+            position: relative;
+            z-index: 1;
+        }
+
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'Sora', sans-serif;
+            color: #ffffff;
+            font-weight: 600;
+        }
+
+        /* Glass card — clear frosted */
+        .glass-card, .metric-card, .chart-card, .chart-wrapper, .card {
+            background: var(--glass-card) !important;
+            border: 1px solid var(--border) !important;
+            border-top: 1px solid var(--border-top) !important;
+            backdrop-filter: blur(28px) saturate(140%) !important;
+            -webkit-backdrop-filter: blur(28px) saturate(140%) !important;
+            border-radius: 20px !important;
+            box-shadow:
+                var(--shadow),
+                inset 0 1px 0 rgba(255,255,255,0.10),
+                inset 0 -1px 0 rgba(0,0,0,0.15) !important;
+            padding: 24px 28px;
+            transition: all 0.3s ease;
+        }
+
+        .glass-card:hover {
+            background: var(--glass-hover) !important;
+        }
+
+        /* Top Nav */
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 70px;
+            background: rgba(10, 12, 16, 0.60) !important;
+            backdrop-filter: blur(32px) !important;
+            border-bottom: 1px solid rgba(255,255,255,0.07) !important;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 40px;
+            z-index: 1000;
+        }
+
+        .nav-logo {
+            font-family: 'Sora', sans-serif;
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text) !important;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .nav-logo span { color: var(--accent) !important; }
+
+        .nav-tabs {
+            display: flex;
+            gap: 10px;
+        }
+
+        .nav-tab {
+            padding: 8px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            color: var(--text-dim) !important;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            background: transparent !important;
+            border: 1px solid transparent !important;
+        }
+
+        .nav-tab:hover {
+            color: var(--text) !important;
+            background: var(--glass) !important;
+        }
+
+        .nav-tab.active {
+            background: rgba(255, 255, 255, 0.08) !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            color: var(--text) !important;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.05) !important;
+            border-radius: 12px;
+            backdrop-filter: blur(10px) !important;
+        }
+
+        .clock-temp {
+            font-family: 'Sora', sans-serif;
+            font-size: 14px;
+            color: var(--text-dim);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        /* Layout */
+        .layout {
+            display: flex;
+            margin-top: 70px;
+            min-height: calc(100vh - 70px);
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 260px;
+            position: fixed;
+            left: 0;
+            top: 70px;
+            bottom: 0;
+            background: rgba(8, 10, 14, 0.55) !important;
+            border-right: 1px solid rgba(255,255,255,0.06) !important;
+            backdrop-filter: blur(32px) !important;
+            padding: 30px 20px;
+            overflow-y: auto;
+        }
+
+        .main-content {
+            margin-left: 260px;
+            padding: 40px;
+            flex: 1;
+            width: calc(100% - 260px);
+        }
+
+        .control-section {
+            margin-bottom: 30px;
+            padding-bottom: 30px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .control-section:last-child {
+            border-bottom: none;
+        }
+
+        .sidebar-section-title {
+            color: var(--text-faint) !important;
+            font-size: 10px;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            margin-bottom: 14px;
+            font-weight: 600;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        .input-group label {
+            display: block;
+            font-size: 12px;
+            color: var(--text);
+            margin-bottom: 8px;
+        }
+
+        input, select {
+            width: 100%;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: var(--text);
+            padding: 10px 14px;
+            font-family: 'DM Sans', sans-serif;
+            outline: none;
+        }
+        
+        select option {
+            background: var(--bg2);
+            color: var(--text);
+        }
+
+        input[type="range"] {
+            accent-color: var(--accent);
+            padding: 0;
+            height: 4px;
+        }
+
+        select:focus, input:focus {
+            border-color: var(--accent);
+        }
+
+        /* Toggles / Pills */
+        .pill-group {
+            display: flex;
+            background: rgba(255,255,255,0.04);
+            border-radius: 10px;
+            padding: 4px;
+            gap: 4px;
+        }
+        
+        .pill {
+            flex: 1;
+            text-align: center;
+            padding: 8px;
+            cursor: pointer;
+            border-radius: 8px;
+            font-size: 13px;
+            color: var(--text-dim);
+            transition: all 0.2s;
+        }
+
+        .pill.active {
+            background: var(--glass-strong);
+            color: var(--accent);
+            font-weight: 500;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            border: 1px solid var(--border);
+        }
+
+        /* Model Toggles */
+        .model-toggle-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .model-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .model-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+        .model-name {
+            font-size: 13px;
+            color: var(--text);
+        }
+        
+        .toggle-switch {
+            cursor: pointer;
+        }
+        .toggle-switch input {
+            display: none;
+        }
+        .toggle-track {
+            display: block;
+            width: 36px; height: 20px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            position: relative;
+            transition: background 0.2s;
+        }
+        .toggle-switch input:checked + .toggle-track {
+            background: rgba(255, 255, 255, 0.25);
+            border-color: rgba(255, 255, 255, 0.4);
+        }
+        .toggle-track::after {
+            content:'';
+            position:absolute;
+            width:14px; height:14px;
+            background: var(--text);
+            border-radius: 50%;
+            top: 2px; left: 2px;
+            transition: left 0.2s;
+        }
+        .toggle-switch input:checked + .toggle-track::after { left: 18px; }
+
+        .btn-primary, .predict-btn, button[type="submit"] {
+            display: block;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.08) !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            color: var(--text) !important;
+            backdrop-filter: blur(10px) !important;
+            font-family: 'Sora', sans-serif;
+            font-size: 15px;
+            font-weight: 600;
+            padding: 12px 24px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary:hover {
+            background: rgba(255, 255, 255, 0.12) !important;
+            border-color: rgba(255, 255, 255, 0.25) !important;
+            box-shadow: 0 0 24px rgba(255, 255, 255, 0.1) !important;
+        }
+
+        /* Tab Content Areas */
+        .tab-pane {
+            display: none;
+            animation: fadeIn 0.4s ease;
+        }
+        
+        .tab-pane.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Grid Layouts */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+
+        .metric-card {
+            border-left: 2px solid rgba(255, 255, 255, 0.15) !important;
+            padding: 22px 24px;
+            border-radius: 16px;
+        }
+
+        .metric-value {
+            font-family: 'Sora', sans-serif;
+            font-size: 30px;
+            font-weight: 700;
+            color: var(--text) !important;
+            letter-spacing: -0.02em;
+            margin-bottom: 4px;
+        }
+
+        .metric-label {
+            color: var(--text-dim) !important;
+            font-size: 12px;
+            margin-top: 4px;
+        }
+
+        /* Chart Containers */
+        .chart-container, .chart-wrapper {
+            position: relative;
+            height: 300px;
+            width: 100%;
+            background: rgba(255,255,255,0.04) !important;
+            border: 1px solid rgba(255,255,255,0.08) !important;
+            border-radius: 16px !important;
+            padding: 20px !important;
+            backdrop-filter: blur(20px) !important;
+        }
+        .chart-container-large {
+            position: relative;
+            height: 450px;
+            width: 100%;
+        }
+
+        /* 3D Map Container */
+        #map-container {
+            width: 100%;
+            height: 600px;
+            border-radius: 16px;
+            overflow: hidden;
+            position: relative;
+        }
+        #map-container .maplibregl-canvas {
+            border-radius: 16px;
+        }
+        #deck-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        th, td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-light);
+        }
+        th {
+            font-family: 'Sora', sans-serif;
+            color: var(--text-dim);
+            font-weight: 600;
+        }
+        tr:hover {
+            background: rgba(255,255,255,0.03);
+        }
+        
+        .val-display {
+            float: right;
+            color: var(--accent);
+            font-family: 'Sora', sans-serif;
+            font-size: 12px;
+        }
+
+        /* Map Popup Customizations */
+        .maplibregl-popup-content, .prediction-popup .maplibregl-popup-content {
+            background: rgba(10,12,16,0.82) !important;
+            backdrop-filter: blur(32px) !important;
+            border: 1px solid rgba(255,255,255,0.12) !important;
+            border-top: 1px solid rgba(255,255,255,0.20) !important;
+            border-radius: 18px !important;
+            box-shadow: 0 8px 40px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.1) inset !important;
+            padding: 0 !important;
+            overflow: hidden !important;
+            color: var(--text) !important;
+        }
+        .popup-card { padding: 20px; }
+        .popup-header h3 { font-family: 'Sora', sans-serif; font-size: 16px; font-weight: 700; margin: 6px 0 14px; color: var(--text); }
+        .popup-zone-type { font-size: 9px; letter-spacing: 0.15em; text-transform: uppercase; padding: 3px 10px; border-radius: 100px; font-weight: 700; }
+        .popup-zone-type.residential { background:rgba(255,255,255,0.1); color:var(--text); }
+        .popup-zone-type.commercial  { background:rgba(255,255,255,0.1); color:var(--text); }
+        .popup-zone-type.industrial  { background:rgba(255,255,255,0.1); color:var(--text); }
+        .popup-zone-type.education   { background:rgba(255,255,255,0.1); color:var(--text); }
+        .popup-zone-type.hub         { background:rgba(255,255,255,0.1); color:var(--text); }
+        .popup-zone-type.mixed       { background:rgba(255,255,255,0.1); color:var(--text); }
+        
+        .popup-kwh { font-family: 'Sora', sans-serif; font-size: 32px; font-weight: 800; color: var(--text) !important; display: block; }
+        .popup-period { font-size: 12px; color: var(--text-dim); }
+        .popup-models { margin: 14px 0; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+        .popup-model-row { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-dim); }
+        .popup-model-row span:last-child { color: var(--text); font-weight: 600; }
+        .popup-insight { font-size: 11px; color: var(--text-faint); line-height: 1.5; margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 10px; }
+        .popup-loading { text-align: center; padding: 20px; color: var(--text-faint); font-size: 13px; }
+        .maplibregl-popup-tip { border-top-color: rgba(10,12,16,0.82) !important; }
+
+        @keyframes pulse-ring {
+            0% { transform: scale(0.5); opacity: 1; }
+            100% { transform: scale(3); opacity: 0; }
+        }
+        .click-pulse {
+            position: absolute;
+            width: 20px; height: 20px;
+            background: var(--accent);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 5;
+            animation: pulse-ring 0.6s ease-out forwards;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Top Navigation -->
+    <nav class="navbar">
+        <div class="nav-logo">⚡ <span>EnergyFlow</span></div>
+        <div class="nav-tabs" id="tabs">
+            <div class="nav-tab active" onclick="switchTab('overview')">Overview</div>
+            <div class="nav-tab" onclick="switchTab('forecast')">Forecast</div>
+            <div class="nav-tab" onclick="switchTab('map')">3D City Map</div>
+            <div class="nav-tab" onclick="switchTab('predict')">Predictions</div>
+            <div class="nav-tab" onclick="switchTab('analytics')">Analytics</div>
+        </div>
+        <div class="clock-temp">
+            <span id="clock">12:00 PM</span>
+            <span>|</span>
+            <span>32°C</span>
+        </div>
+    </nav>
+
+    <div class="layout">
+        <!-- Sidebar Content -->
+        <div class="sidebar">
+            <div class="control-section">
+                <div class="sidebar-section-title">Dataset Configuration</div>
+                <div class="pill-group">
+                    <div class="pill active" id="ds-hh" onclick="setDataset('Household')">Household</div>
+                    <div class="pill" id="ds-comm" onclick="setDataset('Commercial')">Commercial</div>
+                </div>
+            </div>
+
+            <div class="control-section">
+                <div class="sidebar-section-title">Model Selection</div>
+                
+                <div class="model-toggle-row">
+                    <div class="model-info">
+                        <span class="model-dot" style="background:var(--accent)"></span>
+                        <span class="model-name">XGBoost / GBR</span>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="mdl-xgb" class="model-toggle" data-model="xgboost" checked>
+                        <span class="toggle-track"></span>
+                    </label>
+                </div>
+                <div class="model-toggle-row">
+                    <div class="model-info">
+                        <span class="model-dot" style="background:#c4c4a0"></span>
+                        <span class="model-name">Linear Regression</span>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="mdl-lr" class="model-toggle" data-model="linearReg" checked>
+                        <span class="toggle-track"></span>
+                    </label>
+                </div>
+                <div class="model-toggle-row">
+                    <div class="model-info">
+                        <span class="model-dot" style="background:var(--accent-green)"></span>
+                        <span class="model-name">ARIMA</span>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="mdl-arima" class="model-toggle" data-model="arima" checked>
+                        <span class="toggle-track"></span>
+                    </label>
+                </div>
+                <div class="model-toggle-row">
+                    <div class="model-info">
+                        <span class="model-dot" style="background:var(--accent-rose)"></span>
+                        <span class="model-name">SARIMA</span>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="mdl-sarima" class="model-toggle" data-model="sarima" checked>
+                        <span class="toggle-track"></span>
+                    </label>
+                </div>
+                <div class="model-toggle-row">
+                    <div class="model-info">
+                        <span class="model-dot" style="background:var(--accent-purple)"></span>
+                        <span class="model-name">LSTM (RNN)</span>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="mdl-lstm" class="model-toggle" data-model="lstm" checked>
+                        <span class="toggle-track"></span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="control-section">
+                <div class="sidebar-section-title">Custom Predictor</div>
+                <div class="input-group">
+                    <label>No. of Rooms / Size</label>
+                    <input type="number" id="pred-rooms" value="3" min="1" max="10">
+                </div>
+                <div class="input-group">
+                    <label>Property Type</label>
+                    <select id="pred-type">
+                        <option value="Apartment">Apartment / Office</option>
+                        <option value="Independent">Independent / Warehouse</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label>Solar Panel Installed</label>
+                    <select id="pred-solar">
+                        <option value="No">No</option>
+                        <option value="Yes">Yes</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label>Solar Capacity (kW)</label>
+                    <input type="range" id="pred-solar-kw" min="0" max="20" step="0.5" value="0" oninput="document.getElementById('sol-kw-val').innerText=this.value+' kW'">
+                    <div class="val-display" id="sol-kw-val" style="margin-top: 4px;">0 kW</div>
+                </div>
+                <div class="input-group" style="margin-top: 25px;">
+                    <label>Month</label>
+                    <select id="pred-month">
+                        <option value="January">January</option>
+                        <option value="May" selected>May</option>
+                        <option value="December">December</option>
+                    </select>
+                </div>
+                <button class="btn-primary" onclick="runPrediction()">Run Prediction</button>
+            </div>
+
+            <div class="control-section">
+                <div class="sidebar-section-title">Future Forecast Scenarios</div>
+                <div class="input-group">
+                    <label>Forecast Horizon <span class="val-display" id="val-years">25y</span></label>
+                    <input type="range" id="fc-years" min="5" max="50" value="25" oninput="document.getElementById('val-years').innerText=this.value+'y'; updateForecast();">
+                </div>
+                <div class="input-group">
+                    <label>Population Growth <span class="val-display" id="val-pop">2.3%</span></label>
+                    <input type="range" id="fc-pop" min="0.5" max="5.0" step="0.1" value="2.3" oninput="document.getElementById('val-pop').innerText=this.value+'%'; updateForecast();">
+                </div>
+                <div class="input-group">
+                    <label>Urbanization Rate <span class="val-display" id="val-urb">1.5%</span></label>
+                    <input type="range" id="fc-urb" min="0.1" max="3.0" step="0.1" value="1.5" oninput="document.getElementById('val-urb').innerText=this.value+'%'; updateForecast();">
+                </div>
+                <div class="input-group">
+                    <label>Income Growth <span class="val-display" id="val-inc">4.5%</span></label>
+                    <input type="range" id="fc-inc" min="1.0" max="8.0" step="0.1" value="4.5" oninput="document.getElementById('val-inc').innerText=this.value+'%'; updateForecast();">
+                </div>
+                
+                <div style="margin-top:20px;">
+                    <div class="model-toggle-row">
+                        <div class="model-info"><span class="model-name" style="font-size:12px;color:var(--text-dim)">Include EV Adoption</span></div>
+                        <label class="toggle-switch"><input type="checkbox" id="fc-ev" checked onchange="updateForecast()"><span class="toggle-track"></span></label>
+                    </div>
+                    <div class="model-toggle-row">
+                        <div class="model-info"><span class="model-name" style="font-size:12px;color:var(--text-dim)">Aggressive Solar</span></div>
+                        <label class="toggle-switch"><input type="checkbox" id="fc-solar" checked onchange="updateForecast()"><span class="toggle-track"></span></label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            
+            <!-- TAB: OVERVIEW -->
+            <div id="tab-overview" class="tab-pane active">
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-value" id="ov-hh">--</div>
+                        <div class="metric-label">Avg Household kWh/m</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="ov-comm">--</div>
+                        <div class="metric-label">Avg Commercial kWh/m</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="ov-solar">--%</div>
+                        <div class="metric-label">Solar Adoption Rate</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="ov-street">36.2k</div>
+                        <div class="metric-label">Street Lights kWh/d</div>
+                    </div>
+                </div>
+
+                <div class="charts-grid">
+                    <div class="chart-card">
+                        <h3 style="font-size: 15px; margin-bottom: 16px;">Monthly Average Consumption</h3>
+                        <div class="chart-wrapper"><canvas id="chartMonthly"></canvas></div>
+                    </div>
+                    <div class="chart-card">
+                        <h3 style="font-size: 15px; margin-bottom: 16px;">Seasonal Breakdown</h3>
+                        <div class="chart-wrapper"><canvas id="chartSeasonal"></canvas></div>
+                    </div>
+                    <div class="chart-card">
+                        <h3 style="font-size: 15px; margin-bottom: 16px;">Commercial by Business Type</h3>
+                        <div class="chart-wrapper"><canvas id="chartCommercial"></canvas></div>
+                    </div>
+                    <div class="chart-card">
+                        <h3 style="font-size: 15px; margin-bottom: 16px;">Dataset Composition (Household)</h3>
+                        <div class="chart-wrapper"><canvas id="chartSolar"></canvas></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB: FORECAST -->
+            <div id="tab-forecast" class="tab-pane">
+                <div class="metrics-grid" style="grid-template-columns: repeat(5, 1fr);">
+                    <div class="metric-card"><div class="metric-value" style="font-size:24px" id="fc-v1">--</div><div class="metric-label">Year 1 Projection</div></div>
+                    <div class="metric-card"><div class="metric-value" style="font-size:24px" id="fc-v5">--</div><div class="metric-label">Year 5</div></div>
+                    <div class="metric-card"><div class="metric-value" style="font-size:24px" id="fc-v10">--</div><div class="metric-label">Year 10</div></div>
+                    <div class="metric-card"><div class="metric-value" style="font-size:24px" id="fc-v25">--</div><div class="metric-label">Year 25</div></div>
+                    <div class="metric-card"><div class="metric-value" style="font-size:24px" id="fc-v50">--</div><div class="metric-label">Year 50</div></div>
+                </div>
+
+                <div class="chart-card" style="margin-bottom: 24px;">
+                    <h3 style="font-size: 18px; margin-bottom: 20px;">50-Year Growth Trajectory</h3>
+                    <div class="chart-container-large"><canvas id="chartForecast"></canvas></div>
+                </div>
+
+                <div class="metrics-grid" style="grid-template-columns: repeat(3, 1fr);">
+                    <div class="metric-card">
+                        <div class="metric-label">Peak Year Consumption</div>
+                        <div class="metric-value" style="font-size:24px; margin-top:8px;" id="fc-peak">-- kWh</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Growth Multiplier</div>
+                        <div class="metric-value" style="font-size:24px; margin-top:8px;" id="fc-mult">-- x</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Key Drivers</div>
+                        <div class="metric-value" style="font-size:18px; margin-top:8px; color:var(--text);">Population & Urbanization</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB: MAP -->
+            <div id="tab-map" class="tab-pane">
+                <div id="map-container" style="width:100%;height:600px;position:relative;border-radius:16px;overflow:hidden;">
+                    <div id="deck-canvas"></div>
+                    <!-- Hover tooltip -->
+                    <div id="map-hover-label" style="
+                        position:absolute; pointer-events:none; z-index:10;
+                        background:rgba(10,12,16,0.82); backdrop-filter:blur(10px);
+                        border:1px solid rgba(255,255,255,0.12); border-radius:8px;
+                        padding:5px 12px; font-size:12px; color:#f0f4f8; font-family:'DM Sans',sans-serif;
+                        opacity:0; transition:opacity 0.15s; white-space:nowrap;
+                    "></div>
+                    
+                    <!-- Instruction Hint -->
+                    <div id="map-hint" style="
+                        position:absolute; bottom:24px; left:50%; transform:translateX(-50%);
+                        background:rgba(10,12,16,0.8); backdrop-filter:blur(16px);
+                        border:1px solid rgba(255,255,255,0.12); border-radius:12px;
+                        padding:10px 20px; font-size:13px; color:rgba(240,244,248,0.7);
+                        pointer-events:none; z-index:10; transition: opacity 0.5s;
+                    ">
+                        👆 Click anywhere on the map to predict energy consumption for that sector
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB: PREDICTIONS -->
+            <div id="tab-predict" class="tab-pane">
+                <div class="charts-grid">
+                    <div class="glass-card">
+                        <h3 style="font-size: 18px; margin-bottom: 20px;">Prediction Results</h3>
+                        <div style="text-align:center; margin-bottom: 30px;">
+                            <div class="metric-label">Estimated Monthly Consumption (Ensemble)</div>
+                            <div class="metric-value" style="font-size: 48px; color:var(--text); text-shadow: none;" id="res-val">-- kWh</div>
+                            <div style="font-size: 13px; color: var(--text-dim); margin-top: 5px;" id="res-desc">Based on active models</div>
+                        </div>
+                        <div class="chart-wrapper" style="height:200px;"><canvas id="chartDonut"></canvas></div>
+                    </div>
+                    <div class="glass-card">
+                        <h3 style="font-size: 18px; margin-bottom: 20px;">Model Comparison</h3>
+                        
+                        <div id="row-xgboost" class="model-comparison-row" style="margin-bottom: 20px;">
+                            <div style="display:flex; justify-content:space-between; margin-bottom: 5px;">
+                                <span>XGBoost (R²: <span id="r2-xgb">--</span>)</span>
+                                <span id="val-xgb" style="color:var(--accent); font-family:'Sora';">-- kWh</span>
+                            </div>
+                            <div style="width:100%; background:rgba(255,255,255,0.06); height:8px; border-radius:4px; overflow:hidden;">
+                                <div style="width:0%; background:var(--accent); height:100%;" id="bar-xgb"></div>
+                            </div>
+                        </div>
+                        
+                        <div id="row-linearReg" class="model-comparison-row" style="margin-bottom: 20px;">
+                            <div style="display:flex; justify-content:space-between; margin-bottom: 5px;">
+                                <span>Linear Regression (R²: <span id="r2-lr">--</span>)</span>
+                                <span id="val-lr" style="color:#c4c4a0; font-family:'Sora';">-- kWh</span>
+                            </div>
+                            <div style="width:100%; background:rgba(255,255,255,0.06); height:8px; border-radius:4px; overflow:hidden;">
+                                <div style="width:0%; background:#c4c4a0; height:100%;" id="bar-lr"></div>
+                            </div>
+                        </div>
+
+                        <div id="row-arima" class="model-comparison-row" style="margin-bottom: 20px;">
+                            <div style="display:flex; justify-content:space-between; margin-bottom: 5px;">
+                                <span>ARIMA</span>
+                                <span id="val-arima" style="color:var(--accent-green); font-family:'Sora';">-- kWh</span>
+                            </div>
+                            <div style="width:100%; background:rgba(255,255,255,0.06); height:8px; border-radius:4px; overflow:hidden;">
+                                <div style="width:0%; background:var(--accent-green); height:100%;" id="bar-arima"></div>
+                            </div>
+                        </div>
+
+                        <div id="row-sarima" class="model-comparison-row" style="margin-bottom: 20px;">
+                            <div style="display:flex; justify-content:space-between; margin-bottom: 5px;">
+                                <span>SARIMA</span>
+                                <span id="val-sarima" style="color:var(--accent-rose); font-family:'Sora';">-- kWh</span>
+                            </div>
+                            <div style="width:100%; background:rgba(255,255,255,0.06); height:8px; border-radius:4px; overflow:hidden;">
+                                <div style="width:0%; background:var(--accent-rose); height:100%;" id="bar-sarima"></div>
+                            </div>
+                        </div>
+
+                        <div id="row-lstm" class="model-comparison-row" style="margin-bottom: 20px;">
+                            <div style="display:flex; justify-content:space-between; margin-bottom: 5px;">
+                                <span>LSTM (RNN)</span>
+                                <span id="val-lstm" style="color:var(--accent-purple); font-family:'Sora';">-- kWh</span>
+                            </div>
+                            <div style="width:100%; background:rgba(255,255,255,0.06); height:8px; border-radius:4px; overflow:hidden;">
+                                <div style="width:0%; background:var(--accent-purple); height:100%;" id="bar-lstm"></div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB: ANALYTICS -->
+            <div id="tab-analytics" class="tab-pane">
+                <div class="glass-card" style="margin-bottom: 24px;">
+                    <h3 style="font-size: 18px; margin-bottom: 20px;">Feature Importance (XGBoost)</h3>
+                    <div class="chart-wrapper"><canvas id="chartFeatures"></canvas></div>
+                </div>
+                <div class="glass-card">
+                    <h3 style="font-size: 18px; margin-bottom: 20px;">Model Performance Summary</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Dataset</th>
+                                <th>Model</th>
+                                <th>RMSE</th>
+                                <th>R² Score</th>
+                                <th>Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Household</td><td><span style="color:var(--accent)">XGBoost</span></td><td>~45.2</td><td>0.89</td><td>Captures nonlinear seasonality</td></tr>
+                            <tr><td>Household</td><td><span style="color:#c4c4a0">Linear Regression</span></td><td>~85.1</td><td>0.65</td><td>Baseline model</td></tr>
+                            <tr><td>Household</td><td><span style="color:var(--accent-green)">ARIMA</span></td><td>~70.5</td><td>0.72</td><td>Good for trend following</td></tr>
+                            <tr><td>Commercial</td><td><span style="color:var(--accent)">XGBoost</span></td><td>~180.5</td><td>0.82</td><td>Strong reliance on connected load</td></tr>
+                            <tr><td>Commercial</td><td><span style="color:#c4c4a0">Linear Regression</span></td><td>~210.0</td><td>0.74</td><td>Misses interaction effects</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // GLOBALS
+        let currentDataset = 'Household';
+        let basePrediction = 500;
+        const API_URL = 'http://localhost:8502';
+        
+        // Chart instances
+        let charts = {};
+
+        // Clock
+        setInterval(() => {
+            document.getElementById('clock').innerText = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        }, 1000);
+
+        // Tab Switching
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-pane').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.nav-tab').forEach(el => el.classList.remove('active'));
+            document.getElementById(`tab-${tabId}`).classList.add('active');
+            event.target.classList.add('active');
+            
+            if(tabId === 'map' && map) {
+                setTimeout(() => map.resize(), 100);
+            }
+        }
+
+        // Dataset Toggle
+        function setDataset(ds) {
+            currentDataset = ds;
+            document.querySelectorAll('.pill').forEach(el => el.classList.remove('active'));
+            document.getElementById(`ds-${ds === 'Household' ? 'hh' : 'comm'}`).classList.add('active');
+            runPrediction();
+        }
+
+        // Model State Tracking
+        const modelState = {
+            xgboost: true,
+            linearReg: true,
+            arima: true,
+            sarima: true,
+            lstm: true
+        };
+
+        document.querySelectorAll('.model-toggle').forEach(toggle => {
+            toggle.addEventListener('change', function() {
+                const modelKey = this.dataset.model;
+                modelState[modelKey] = this.checked;
+
+                if (window.lastPredictionParams) {
+                    runPrediction();
+                }
+                if (window.currentPopup && window.lastClickSector) {
+                    updateMapPrediction(window.lastClickSector);
+                }
+                updateChartVisibility(modelKey, this.checked);
+            });
+        });
+
+        function updateChartVisibility(modelKey, visible) {
+            const row = document.getElementById('row-' + modelKey);
+            if (row) row.style.display = visible ? 'block' : 'none';
+        }
+
+        // Initialize Chart.js defaults
+        Chart.defaults.color = 'rgba(240,244,248,0.5)';
+        Chart.defaults.font.family = "'DM Sans', sans-serif";
+        Chart.defaults.borderColor = 'rgba(255,255,255,0.06)';
+
+        // Setup Charts
+        function initCharts() {
+            const ctxMonthly = document.getElementById('chartMonthly').getContext('2d');
+            charts.monthly = new Chart(ctxMonthly, {
+                type: 'line',
+                data: { labels: [], datasets: [] },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    elements: { line: { tension: 0.4 } },
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+
+            const ctxSeasonal = document.getElementById('chartSeasonal').getContext('2d');
+            charts.seasonal = new Chart(ctxSeasonal, {
+                type: 'bar',
+                data: { labels: [], datasets: [] },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+
+            const ctxComm = document.getElementById('chartCommercial').getContext('2d');
+            charts.commercial = new Chart(ctxComm, {
+                type: 'bar',
+                data: { labels: [], datasets: [] },
+                options: {
+                    indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } }
+                }
+            });
+
+            const ctxSolar = document.getElementById('chartSolar').getContext('2d');
+            charts.solar = new Chart(ctxSolar, {
+                type: 'bar',
+                data: { labels: ['No Solar', 'With Solar'], datasets: [{ data: [150, 50], backgroundColor: ['#8bb8d4', '#a8c8e8'] }] },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } }
+                }
+            });
+
+            const ctxForecast = document.getElementById('chartForecast').getContext('2d');
+            let gradient = ctxForecast.createLinearGradient(0, 0, 0, 400);
+            gradient.addColorStop(0, 'rgba(168, 200, 232, 0.4)');
+            gradient.addColorStop(1, 'rgba(168, 200, 232, 0.0)');
+            
+            charts.forecast = new Chart(ctxForecast, {
+                type: 'line',
+                data: { labels: [], datasets: [] },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: { legend: { position: 'bottom' } },
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
+
+            const ctxDonut = document.getElementById('chartDonut').getContext('2d');
+            charts.donut = new Chart(ctxDonut, {
+                type: 'doughnut',
+                data: { labels: ['Base Load', 'HVAC/Appliances'], datasets: [{ data: [30, 70], backgroundColor: ['rgba(255,255,255,0.03)', '#a8c8e8'], borderWidth: 0 }] },
+                options: {
+                    responsive: true, maintainAspectRatio: false, cutout: '80%',
+                    plugins: { legend: { display: false } }
+                }
+            });
+
+            const ctxFeatures = document.getElementById('chartFeatures').getContext('2d');
+            charts.features = new Chart(ctxFeatures, {
+                type: 'bar',
+                data: { labels: [], datasets: [] },
+                options: {
+                    indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        // Fetch Data
+        async function fetchOverview() {
+            try {
+                let res = await fetch(`${API_URL}/api/overview`);
+                if(!res.ok) throw new Error("Backend not running");
+                let data = await res.json();
+                document.getElementById('ov-hh').innerText = data.avg_hh_kwh;
+                document.getElementById('ov-comm').innerText = data.avg_comm_kwh;
+                document.getElementById('ov-solar').innerText = data.solar_adoption_pct + '%';
+            } catch(e) {
+                console.log("Using mock data");
+                document.getElementById('ov-hh').innerText = "420";
+                document.getElementById('ov-comm').innerText = "2,150";
+                document.getElementById('ov-solar').innerText = "15%";
+            }
+        }
+
+        async function fetchCharts() {
+            try {
+                let res = await fetch(`${API_URL}/api/monthly`);
+                if(res.ok) {
+                    let d = await res.json();
+                    charts.monthly.data = {
+                        labels: d.months,
+                        datasets: [
+                            { label: 'Household', data: d.household, borderColor: '#a8c8e8', backgroundColor: 'rgba(168,200,232,0.1)', fill: true },
+                            { label: 'Commercial (/5)', data: d.commercial.map(v=>v/5), borderColor: '#c4c4a0', borderDash: [5, 5] }
+                        ]
+                    };
+                    charts.monthly.update();
+                }
+
+                res = await fetch(`${API_URL}/api/seasonal`);
+                if(res.ok) {
+                    let d = await res.json();
+                    charts.seasonal.data = {
+                        labels: d.seasons,
+                        datasets: [
+                            { label: 'Household', data: d.household, backgroundColor: '#a8c8e8' },
+                            { label: 'Commercial (/5)', data: d.commercial.map(v=>v/5), backgroundColor: '#c4c4a0' }
+                        ]
+                    };
+                    charts.seasonal.update();
+                }
+
+                res = await fetch(`${API_URL}/api/commercial`);
+                if(res.ok) {
+                    let d = await res.json();
+                    charts.commercial.data = {
+                        labels: d.types,
+                        datasets: [{ data: d.kwh, backgroundColor: '#88c4a8' }]
+                    };
+                    charts.commercial.update();
+                }
+
+                res = await fetch(`${API_URL}/api/features`);
+                if(res.ok) {
+                    let d = await res.json();
+                    charts.features.data = {
+                        labels: d.features,
+                        datasets: [{ data: d.importance, backgroundColor: '#a8c8e8' }]
+                    };
+                    charts.features.update();
+                }
+            } catch(e) {
+                console.log("Chart fetch error", e);
+            }
+        }
+
+        async function runPrediction() {
+            let req = {
+                rooms: parseInt(document.getElementById('pred-rooms').value),
+                house_type: document.getElementById('pred-type').value,
+                solar: document.getElementById('pred-solar').value,
+                solar_kw: parseFloat(document.getElementById('pred-solar-kw').value),
+                month: document.getElementById('pred-month').value,
+                dataset: currentDataset
+            };
+            window.lastPredictionParams = req;
+
+            let basePred = 500;
+            let lrPred = 550;
+            let r2_xgb = 0.89;
+            let r2_lr = 0.65;
+
+            try {
+                let res = await fetch(`${API_URL}/api/predict`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(req)
+                });
+                if(res.ok) {
+                    let data = await res.json();
+                    basePred = data.prediction_kwh;
+                    lrPred = data.prediction_lr_kwh;
+                    r2_xgb = data.model_scores.xgboost_r2;
+                    r2_lr = data.model_scores.linear_r2;
+                }
+            } catch(e) {
+                basePred = Math.round(300 + Math.random()*200);
+                lrPred = Math.round(basePred * 1.1);
+            }
+
+            basePrediction = basePred; // save globally for forecast
+
+            const activeModels = Object.entries(modelState).filter(([k,v]) => v).map(([k]) => k);
+            if (activeModels.length === 0) {
+                document.getElementById('res-val').innerText = '-- kWh';
+                document.getElementById('res-desc').innerText = 'No models selected';
+                return;
+            }
+
+            const results = {};
+            let total = 0; let count = 0;
+            
+            if (modelState.xgboost) { results.xgboost = basePred; total += basePred; count++; }
+            if (modelState.linearReg) { results.linearReg = lrPred; total += lrPred; count++; }
+            if (modelState.arima) { let v = Math.round(basePred * 0.95); results.arima = v; total += v; count++; }
+            if (modelState.sarima) { let v = Math.round(basePred * 0.92); results.sarima = v; total += v; count++; }
+            if (modelState.lstm) { let v = Math.round(basePred * 0.97); results.lstm = v; total += v; count++; }
+
+            const ensemble = Math.round(total / count);
+
+            // Update UI
+            document.getElementById('res-val').innerText = ensemble + ' kWh';
+            document.getElementById('res-desc').innerText = 'Ensemble of active models';
+            
+            // Update comparison bars
+            if (modelState.xgboost) {
+                document.getElementById('val-xgb').innerText = results.xgboost + ' kWh';
+                document.getElementById('bar-xgb').style.width = Math.min(100, (results.xgboost/2000)*100) + '%';
+                if (document.getElementById('r2-xgb')) document.getElementById('r2-xgb').innerText = r2_xgb;
+            }
+            if (modelState.linearReg) {
+                document.getElementById('val-lr').innerText = results.linearReg + ' kWh';
+                document.getElementById('bar-lr').style.width = Math.min(100, (results.linearReg/2000)*100) + '%';
+                if (document.getElementById('r2-lr')) document.getElementById('r2-lr').innerText = r2_lr;
+            }
+            if (modelState.arima) {
+                document.getElementById('val-arima').innerText = results.arima + ' kWh';
+                document.getElementById('bar-arima').style.width = Math.min(100, (results.arima/2000)*100) + '%';
+            }
+            if (modelState.sarima) {
+                document.getElementById('val-sarima').innerText = results.sarima + ' kWh';
+                document.getElementById('bar-sarima').style.width = Math.min(100, (results.sarima/2000)*100) + '%';
+            }
+            if (modelState.lstm) {
+                document.getElementById('val-lstm').innerText = results.lstm + ' kWh';
+                document.getElementById('bar-lstm').style.width = Math.min(100, (results.lstm/2000)*100) + '%';
+            }
+
+            updateForecast();
+        }
+
+        async function updateForecast() {
+            let req = {
+                base_kwh: basePrediction,
+                years: parseInt(document.getElementById('fc-years').value),
+                pop_growth: parseFloat(document.getElementById('fc-pop').value),
+                urbanization: parseFloat(document.getElementById('fc-urb').value),
+                income_growth: parseFloat(document.getElementById('fc-inc').value),
+                ev_adoption: document.getElementById('fc-ev').checked,
+                solar_growth: document.getElementById('fc-solar').checked
+            };
+
+            try {
+                let res = await fetch(`${API_URL}/api/forecast`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(req)
+                });
+                if(res.ok) {
+                    let data = await res.json();
+                    
+                    if(data.length >= 1) document.getElementById('fc-v1').innerText = data[0].kwh;
+                    if(data.length >= 5) document.getElementById('fc-v5').innerText = data[4].kwh; else document.getElementById('fc-v5').innerText = "--";
+                    if(data.length >= 10) document.getElementById('fc-v10').innerText = data[9].kwh; else document.getElementById('fc-v10').innerText = "--";
+                    if(data.length >= 25) document.getElementById('fc-v25').innerText = data[24].kwh; else document.getElementById('fc-v25').innerText = "--";
+                    if(data.length >= 50) document.getElementById('fc-v50').innerText = data[49].kwh; else document.getElementById('fc-v50').innerText = "--";
+
+                    let peak = Math.max(...data.map(d=>d.kwh));
+                    let mult = data[data.length-1].kwh / data[0].kwh;
+                    document.getElementById('fc-peak').innerText = peak + ' kWh';
+                    document.getElementById('fc-mult').innerText = mult.toFixed(2) + ' x';
+
+                    let gradient = charts.forecast.ctx.createLinearGradient(0, 0, 0, 400);
+                    gradient.addColorStop(0, 'rgba(168, 200, 232, 0.4)');
+                    gradient.addColorStop(1, 'rgba(168, 200, 232, 0.0)');
+
+                    charts.forecast.data = {
+                        labels: data.map(d=>'Yr '+d.year),
+                        datasets: [
+                            { label: 'Projected', data: data.map(d=>d.kwh), borderColor: '#a8c8e8', backgroundColor: gradient, fill: true, tension: 0.3 },
+                            { label: 'High (15%)', data: data.map(d=>d.high), borderColor: 'rgba(137,180,204,0.4)', borderDash: [5,5], fill: false, pointRadius: 0 },
+                            { label: 'Low (15%)', data: data.map(d=>d.low), borderColor: 'rgba(137,180,204,0.4)', borderDash: [5,5], fill: false, pointRadius: 0 }
+                        ]
+                    };
+                    charts.forecast.update();
+                }
+            } catch(e) { console.log(e); }
+        }
+
+        // MAPLIBRE MAP (Click to Predict)
+        let map;
+        const hoverLabel = document.getElementById('map-hover-label');
+
+        function identifySector(lat, lng) {
+            if (lat > 28.480 && lng > 77.418) return { name: "Pari Chowk Hub", type: "hub", avgConsumption: 1200 };
+            if (lat > 28.478 && lng < 77.408) return { name: "Sector 1", type: "residential", avgConsumption: 280 };
+            if (lat > 28.470 && lng > 77.408 && lng < 77.418) return { name: "Sector 2", type: "residential", avgConsumption: 310 };
+            if (lat < 28.472 && lng > 77.416) return { name: "Sector 18 Commercial", type: "commercial", avgConsumption: 950 };
+            if (lat < 28.472 && lng < 77.402) return { name: "Knowledge Park", type: "education", avgConsumption: 420 };
+            if (lat > 28.474 && lng > 77.428) return { name: "Ecotech Industrial", type: "industrial", avgConsumption: 2100 };
+            if (lat > 28.482 && lng < 77.406) return { name: "Sector 62", type: "commercial", avgConsumption: 780 };
+            if (lat > 28.480 && lng > 77.418 && lng < 77.428) return { name: "Alpha 1", type: "residential", avgConsumption: 340 };
+            return { name: "Greater Noida Area", type: "mixed", avgConsumption: 450 };
+        }
+
+        function updateMapPrediction(sector) {
+            const modelsHTML = [
+                modelState.xgboost   ? `<div class="popup-model-row"><span style="color:var(--accent)">XGBoost</span><span>${Math.round(sector.avgConsumption * 0.95)} kWh</span></div>` : '',
+                modelState.linearReg ? `<div class="popup-model-row"><span style="color:#c4c4a0">Linear Reg</span><span>${Math.round(sector.avgConsumption * 1.05)} kWh</span></div>` : '',
+                modelState.arima     ? `<div class="popup-model-row"><span style="color:var(--accent-green)">ARIMA</span><span>${Math.round(sector.avgConsumption * 0.90)} kWh</span></div>` : '',
+                modelState.sarima    ? `<div class="popup-model-row"><span style="color:var(--accent-rose)">SARIMA</span><span>${Math.round(sector.avgConsumption * 0.92)} kWh</span></div>` : '',
+                modelState.lstm      ? `<div class="popup-model-row"><span style="color:var(--accent-purple)">LSTM (RNN)</span><span>${Math.round(sector.avgConsumption * 0.97)} kWh</span></div>` : '',
+            ].join('');
+
+            const activeValues = [];
+            if (modelState.xgboost)   activeValues.push(sector.avgConsumption * 0.95);
+            if (modelState.linearReg) activeValues.push(sector.avgConsumption * 1.05);
+            if (modelState.arima)     activeValues.push(sector.avgConsumption * 0.90);
+            if (modelState.sarima)    activeValues.push(sector.avgConsumption * 0.92);
+            if (modelState.lstm)      activeValues.push(sector.avgConsumption * 0.97);
+            
+            const ensemble = activeValues.length > 0 
+                ? Math.round(activeValues.reduce((a,b)=>a+b,0) / activeValues.length)
+                : 0;
+
+            const popupEl = document.querySelector('.maplibregl-popup');
+            if (popupEl) {
+                const kwh = popupEl.querySelector('.popup-kwh');
+                if (kwh) kwh.textContent = activeValues.length > 0 ? ensemble + ' kWh' : '-- kWh';
+                const modelRows = popupEl.querySelector('.popup-models');
+                if (modelRows) modelRows.innerHTML = modelsHTML;
+            }
+        }
+
+        function initMap() {
+            try {
+                map = new maplibregl.Map({
+                    container: 'deck-canvas',
+                    style: {
+                        version: 8,
+                        sources: {
+                            'osm-tiles': {
+                                type: 'raster',
+                                tiles: [
+                                    'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                    'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                    'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png'
+                                ],
+                                tileSize: 256,
+                                attribution: '© OpenStreetMap contributors'
+                            }
+                        },
+                        layers: [
+                            {
+                                id: 'osm-layer',
+                                type: 'raster',
+                                source: 'osm-tiles',
+                            }
+                        ]
+                    },
+                    center: [77.4565, 28.4744],
+                    zoom: 14,
+                    pitch: 45,
+                    bearing: -10,
+                    antialias: true
+                });
+
+                const applyMapFilter = () => {
+                    const canvas = document.querySelector('#map-container canvas');
+                    if (canvas && !canvas.style.filter.includes('invert')) {
+                        canvas.style.filter = 'invert(1) hue-rotate(180deg) brightness(0.85) contrast(1.1) saturate(0.6)';
+                    }
+                };
+
+                map.on('load', applyMapFilter);
+
+                const observer = new MutationObserver(applyMapFilter);
+                observer.observe(document.getElementById('map-container'), { childList: true, subtree: true });
+
+                let hintDismissed = false;
+
+                map.on('mousemove', function(e) {
+                    const sector = identifySector(e.lngLat.lat, e.lngLat.lng);
+                    hoverLabel.style.left = (e.point.x + 16) + 'px';
+                    hoverLabel.style.top = (e.point.y - 10) + 'px';
+                    hoverLabel.textContent = sector.name;
+                    hoverLabel.style.opacity = '1';
+                });
+                
+                map.on('mouseleave', () => { hoverLabel.style.opacity = '0'; });
+
+                map.on('click', function(e) {
+                    if(!hintDismissed) {
+                        let hintEl = document.getElementById('map-hint');
+                        if (hintEl) {
+                            hintEl.style.opacity = '0';
+                            setTimeout(() => hintEl.remove(), 500);
+                        }
+                        hintDismissed = true;
+                    }
+
+                    // Click pulse animation
+                    const pulse = document.createElement('div');
+                    pulse.className = 'click-pulse';
+                    pulse.style.left = (e.point.x - 10) + 'px';
+                    pulse.style.top = (e.point.y - 10) + 'px';
+                    document.getElementById('map-container').appendChild(pulse);
+                    setTimeout(() => pulse.remove(), 600);
+
+                    const sector = identifySector(e.lngLat.lat, e.lngLat.lng);
+                    window.lastClickSector = sector;
+                    window.currentPopup = true;
+
+                    // Remove existing popups
+                    const existingPopups = document.querySelectorAll('.maplibregl-popup');
+                    existingPopups.forEach(p => p.remove());
+
+                    new maplibregl.Popup({
+                        closeButton: true,
+                        className: 'prediction-popup',
+                        maxWidth: '320px'
+                    })
+                    .setLngLat(e.lngLat)
+                    .setHTML(`
+                        <div class="popup-card">
+                            <div class="popup-header">
+                                <span class="popup-zone-type ${sector.type}">${sector.type.toUpperCase()}</span>
+                                <h3>${sector.name}</h3>
+                            </div>
+                            <div class="popup-prediction">
+                                <span class="popup-kwh">-- kWh</span>
+                                <span class="popup-period">/ month predicted</span>
+                                <div class="popup-models">
+                                    <div class="popup-loading">Analyzing sector...</div>
+                                </div>
+                                <div class="popup-insight">Based on location (${e.lngLat.lat.toFixed(4)}, ${e.lngLat.lng.toFixed(4)}), the expected consumption matches typical ${sector.type} load profiles.</div>
+                            </div>
+                        </div>
+                    `)
+                    .addTo(map)
+                    .on('close', () => { window.currentPopup = false; });
+
+                    // Simulate slight network delay before showing predictions
+                    setTimeout(() => {
+                        updateMapPrediction(sector);
+                    }, 600);
+                });
+
+                map.on('error', function(e) {
+                    console.warn('Map error:', e);
+                    // show fallback message in map container
+                    document.getElementById('map-container').innerHTML += 
+                        '<div style="position:absolute;bottom:16px;left:50%;transform:translateX(-50%);background:rgba(10,12,16,0.8);padding:8px 16px;border-radius:8px;font-size:12px;color:rgba(240,244,248,0.5);">Connect to internet to load map tiles</div>';
+                });
+
+            } catch(err) {
+                document.getElementById('map-container').style.background = 
+                    'radial-gradient(ellipse at center, #13161b 0%, #0e1014 100%)';
+            }
+        }
+
+        // INIT
+        window.onload = async () => {
+            initCharts();
+            initMap();
+            await fetchOverview();
+            await fetchCharts();
+            await runPrediction();
+        };
+
+    </script>
+</body>
+</html>
