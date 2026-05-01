@@ -6,7 +6,7 @@ A high-fidelity, predictive energy consumption dashboard featuring a dynamic 3D 
 
 ## 🚀 Features
 
-- **Liquid Glass UI:** Immersive, true-dark mode interface with colorless frosted glass components, deep background refractions, and glowing accents.
+- ** UI:** Immersive, true-dark mode interface with colorless frosted glass components, deep background refractions, and glowing accents.
 - **Ensemble ML Predictions:** Real-time predictions combining XGBoost, Linear Regression, ARIMA, SARIMA, and LSTM models. Toggle models on/off to instantly recalculate the ensemble average.
 - **Interactive 3D City Map:** MapLibre-powered 3D map with custom canvas filters for a perfect night mode. Click on any city sector to view localized energy consumption predictions.
 - **Future Forecasting:** 50-year interactive growth trajectory that dynamically updates based on population growth, urbanization, income growth, EV adoption, and solar expansion variables.
