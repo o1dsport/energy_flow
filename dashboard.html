@@ -10,37 +10,37 @@
     <link href="https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.css" rel="stylesheet"/>
     <style>
         :root {
-            /* Page background — deep neutral dark, zero warmth */
-            --bg:           #0e1014;
-            --bg2:          #13161b;
+            /* Page background — pure neutral dark */
+            --bg:           #0a0a0a;
+            --bg2:          #111111;
 
-            /* Glass — completely neutral frosted glass, no tint */
-            --glass:        rgba(255, 255, 255, 0.05);
-            --glass-hover:  rgba(255, 255, 255, 0.08);
-            --glass-strong: rgba(255, 255, 255, 0.10);
-            --glass-card:   rgba(255, 255, 255, 0.055);
+            /* Glass — stronger frosted liquid glass */
+            --glass:        rgba(255, 255, 255, 0.06);
+            --glass-hover:  rgba(255, 255, 255, 0.10);
+            --glass-strong: rgba(255, 255, 255, 0.15);
+            --glass-card:   rgba(255, 255, 255, 0.08);
 
-            /* Borders — pure white at low opacity, zero color tint */
-            --border:       rgba(255, 255, 255, 0.10);
-            --border-light: rgba(255, 255, 255, 0.06);
-            --border-top:   rgba(255, 255, 255, 0.18);  /* lighter top = glass rim effect */
+            /* Borders — pure white at low opacity */
+            --border:       rgba(255, 255, 255, 0.12);
+            --border-light: rgba(255, 255, 255, 0.08);
+            --border-top:   rgba(255, 255, 255, 0.25);  /* strong top light reflection */
 
-            /* Accents — cool blue-white palette, NO amber/orange */
-            --accent:       #a8c8e8;   /* soft cool blue — primary accent */
-            --accent2:      #8bb8d4;   /* medium blue */
-            --accent3:      #6ca8c4;   /* deeper blue */
-            --accent-green: #88c4a8;   /* muted teal-green */
-            --accent-purple:#a898d4;   /* soft violet */
-            --accent-rose:  #c498a8;   /* desaturated rose */
+            /* Accents — pure silver/white liquid glass palette */
+            --accent:       #ffffff;   /* pure white */
+            --accent2:      #e0e0e0;   /* light silver */
+            --accent3:      #c0c0c0;   /* silver */
+            --accent-green: #b2d8d8;   /* neutral desaturated teal */
+            --accent-purple:#d8b2d8;   /* neutral desaturated purple */
+            --accent-rose:  #d8b2b2;   /* neutral desaturated rose */
 
-            /* Text — pure cool white */
-            --text:         #f0f4f8;
-            --text-dim:     rgba(240, 244, 248, 0.50);
-            --text-faint:   rgba(240, 244, 248, 0.28);
+            /* Text — pure white */
+            --text:         #ffffff;
+            --text-dim:     rgba(255, 255, 255, 0.60);
+            --text-faint:   rgba(255, 255, 255, 0.35);
 
-            /* Shadows — dark with zero color */
-            --shadow:       0 4px 24px rgba(0, 0, 0, 0.45);
-            --shadow-lg:    0 8px 40px rgba(0, 0, 0, 0.55);
+            /* Shadows — softer, deeper */
+            --shadow:       0 10px 30px rgba(0, 0, 0, 0.5);
+            --shadow-lg:    0 20px 50px rgba(0, 0, 0, 0.6);
         }
 
         * {
@@ -50,7 +50,9 @@
         }
 
         body {
-            background: var(--bg);
+            background: url('background.jpg') no-repeat center center fixed;
+            background-size: cover;
+            background-color: var(--bg); /* fallback */
             min-height: 100vh;
             font-family: 'DM Sans', sans-serif;
             color: var(--text);
@@ -60,7 +62,7 @@
             font-size: 14px;
         }
 
-        /* Subtle pure white blobs for refraction */
+        /* Dark overlay and subtle pure white blobs for refraction */
         body::before {
             content: '';
             position: fixed;
@@ -68,6 +70,7 @@
             z-index: 0;
             pointer-events: none;
             background:
+                rgba(0, 0, 0, 0.65), /* Dark overlay to make glass cards pop and text readable */
                 radial-gradient(ellipse 800px 600px at 20% 20%, rgba(255, 255, 255, 0.03) 0%, transparent 70%),
                 radial-gradient(ellipse 700px 500px at 80% 80%, rgba(255, 255, 255, 0.02) 0%, transparent 70%),
                 radial-gradient(ellipse 600px 400px at 80% 20%, rgba(255, 255, 255, 0.02) 0%, transparent 70%),
@@ -91,8 +94,8 @@
             background: var(--glass-card) !important;
             border: 1px solid var(--border) !important;
             border-top: 1px solid var(--border-top) !important;
-            backdrop-filter: blur(28px) saturate(140%) !important;
-            -webkit-backdrop-filter: blur(28px) saturate(140%) !important;
+            backdrop-filter: blur(40px) saturate(150%) !important;
+            -webkit-backdrop-filter: blur(40px) saturate(150%) !important;
             border-radius: 20px !important;
             box-shadow:
                 var(--shadow),
@@ -977,7 +980,7 @@
             const ctxSolar = document.getElementById('chartSolar').getContext('2d');
             charts.solar = new Chart(ctxSolar, {
                 type: 'bar',
-                data: { labels: ['No Solar', 'With Solar'], datasets: [{ data: [150, 50], backgroundColor: ['#8bb8d4', '#a8c8e8'] }] },
+                data: { labels: ['No Solar', 'With Solar'], datasets: [{ data: [150, 50], backgroundColor: ['#b0b0b0', '#ffffff'] }] },
                 options: {
                     responsive: true, maintainAspectRatio: false,
                     plugins: { legend: { display: false } }
@@ -986,8 +989,8 @@
 
             const ctxForecast = document.getElementById('chartForecast').getContext('2d');
             let gradient = ctxForecast.createLinearGradient(0, 0, 0, 400);
-            gradient.addColorStop(0, 'rgba(168, 200, 232, 0.4)');
-            gradient.addColorStop(1, 'rgba(168, 200, 232, 0.0)');
+            gradient.addColorStop(0, 'rgba(255, 255, 255, 0.25)');
+            gradient.addColorStop(1, 'rgba(255, 255, 255, 0.0)');
             
             charts.forecast = new Chart(ctxForecast, {
                 type: 'line',
@@ -1003,7 +1006,7 @@
             const ctxDonut = document.getElementById('chartDonut').getContext('2d');
             charts.donut = new Chart(ctxDonut, {
                 type: 'doughnut',
-                data: { labels: ['Base Load', 'HVAC/Appliances'], datasets: [{ data: [30, 70], backgroundColor: ['rgba(255,255,255,0.03)', '#a8c8e8'], borderWidth: 0 }] },
+                data: { labels: ['Base Load', 'HVAC/Appliances'], datasets: [{ data: [30, 70], backgroundColor: ['rgba(255,255,255,0.03)', '#ffffff'], borderWidth: 0 }] },
                 options: {
                     responsive: true, maintainAspectRatio: false, cutout: '80%',
                     plugins: { legend: { display: false } }
@@ -1046,8 +1049,8 @@
                     charts.monthly.data = {
                         labels: d.months,
                         datasets: [
-                            { label: 'Household', data: d.household, borderColor: '#a8c8e8', backgroundColor: 'rgba(168,200,232,0.1)', fill: true },
-                            { label: 'Commercial (/5)', data: d.commercial.map(v=>v/5), borderColor: '#c4c4a0', borderDash: [5, 5] }
+                            { label: 'Household', data: d.household, borderColor: '#ffffff', backgroundColor: 'rgba(255,255,255,0.1)', fill: true },
+                            { label: 'Commercial (/5)', data: d.commercial.map(v=>v/5), borderColor: '#cccccc', borderDash: [5, 5] }
                         ]
                     };
                     charts.monthly.update();
@@ -1059,8 +1062,8 @@
                     charts.seasonal.data = {
                         labels: d.seasons,
                         datasets: [
-                            { label: 'Household', data: d.household, backgroundColor: '#a8c8e8' },
-                            { label: 'Commercial (/5)', data: d.commercial.map(v=>v/5), backgroundColor: '#c4c4a0' }
+                            { label: 'Household', data: d.household, backgroundColor: '#ffffff' },
+                            { label: 'Commercial (/5)', data: d.commercial.map(v=>v/5), backgroundColor: '#cccccc' }
                         ]
                     };
                     charts.seasonal.update();
@@ -1081,7 +1084,7 @@
                     let d = await res.json();
                     charts.features.data = {
                         labels: d.features,
-                        datasets: [{ data: d.importance, backgroundColor: '#a8c8e8' }]
+                        datasets: [{ data: d.importance, backgroundColor: '#ffffff' }]
                     };
                     charts.features.update();
                 }
@@ -1207,15 +1210,15 @@
                     document.getElementById('fc-mult').innerText = mult.toFixed(2) + ' x';
 
                     let gradient = charts.forecast.ctx.createLinearGradient(0, 0, 0, 400);
-                    gradient.addColorStop(0, 'rgba(168, 200, 232, 0.4)');
-                    gradient.addColorStop(1, 'rgba(168, 200, 232, 0.0)');
+                    gradient.addColorStop(0, 'rgba(255, 255, 255, 0.25)');
+                    gradient.addColorStop(1, 'rgba(255, 255, 255, 0.0)');
 
                     charts.forecast.data = {
                         labels: data.map(d=>'Yr '+d.year),
                         datasets: [
-                            { label: 'Projected', data: data.map(d=>d.kwh), borderColor: '#a8c8e8', backgroundColor: gradient, fill: true, tension: 0.3 },
-                            { label: 'High (15%)', data: data.map(d=>d.high), borderColor: 'rgba(137,180,204,0.4)', borderDash: [5,5], fill: false, pointRadius: 0 },
-                            { label: 'Low (15%)', data: data.map(d=>d.low), borderColor: 'rgba(137,180,204,0.4)', borderDash: [5,5], fill: false, pointRadius: 0 }
+                            { label: 'Projected', data: data.map(d=>d.kwh), borderColor: '#ffffff', backgroundColor: gradient, fill: true, tension: 0.3 },
+                            { label: 'High (15%)', data: data.map(d=>d.high), borderColor: 'rgba(255,255,255,0.3)', borderDash: [5,5], fill: false, pointRadius: 0 },
+                            { label: 'Low (15%)', data: data.map(d=>d.low), borderColor: 'rgba(255,255,255,0.3)', borderDash: [5,5], fill: false, pointRadius: 0 }
                         ]
                     };
                     charts.forecast.update();
